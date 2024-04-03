@@ -1,4 +1,4 @@
-"""trying facenet for face recognition on top of caffe detection"""
+"""trying facenet for face recognition - tf graph loading is messy"""
 import cv2
 import numpy as np
 import logging
@@ -28,20 +28,27 @@ class Camera:
             log.warning(f"facenet pb not found: {FACENET_MODEL}")
             return
         try:
+            # cv2.dnn.readNetFromTensorflow chokes on the frozen pb
+            # tried tf.compat.v1.Session + GraphDef too but all the node names
+            # from tools/freeze_graph.py are internal and not documented clearly
+            # leaving this for now, looking for alternatives
             self.facenet = cv2.dnn.readNetFromTensorflow(FACENET_MODEL)
-            log.info("facenet loaded")
+            log.info("facenet loaded (output layer still unknown)")
+        except cv2.error as e:
+            # this keeps failing with "FAILED: ReadProtoFromBinaryFile"
+            # the .pb from davidsandberg/facenet is TF1 format, opencv cant read it
+            log.error(f"opencv cannot parse frozen pb: {e}")
         except Exception as e:
             log.error(f"facenet load error: {e}")
 
     def get_embedding(self, face_img):
         if self.facenet is None:
             return None
-        # resize to 160x160 as facenet expects
         resized = cv2.resize(face_img, (160, 160))
         blob = cv2.dnn.blobFromImage(resized, 1.0/128.0, (160, 160), (127.5, 127.5, 127.5))
         self.facenet.setInput(blob)
-        # not working yet - output node name from frozen pb is unclear
-        # tried: 'embeddings', 'InceptionResnetV1/Logits/AvgPool_1a_8x8/AvgPool'
+        # tried: 'embeddings', 'InceptionResnetV1/Logits/AvgPool_1a_8x8/AvgPool', 'output'
+        # all throw cv2.error: Unknown layer type: Switch
         return self.facenet.forward().flatten()
 
     def process_frame(self, frame):
