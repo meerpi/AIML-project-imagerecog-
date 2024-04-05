@@ -1,4 +1,4 @@
-"""yunet detection + sface recognizer stub"""
+"""yunet + sface with CLAHE equalization - embeddings actually work now"""
 import cv2
 import numpy as np
 import logging
@@ -33,7 +33,7 @@ class Camera:
             return
         try:
             self.detector = cv2.FaceDetectorYN.create(YUNET_MODEL, "", (320, 240))
-            log.info("YuNet detector loaded")
+            log.info("YuNet face detector loaded.")
         except Exception as e:
             log.error(f"yunet load failed: {e}")
 
@@ -43,9 +43,27 @@ class Camera:
             return
         try:
             self.face_recognizer = cv2.FaceRecognizerSF.create(SFACE_MODEL, "")
-            log.info(f"SFace loaded ({EMBEDDING_DIM}-d)")
+            log.info(f"SFace recognizer loaded ({EMBEDDING_DIM}-d embeddings).")
         except Exception as e:
             log.error(f"sface load failed: {e}")
+
+    def get_embedding(self, face_img):
+        if self.face_recognizer is None:
+            return None
+        try:
+            # CLAHE makes a big difference for varied lighting
+            gray = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            eq = clahe.apply(gray)
+            face_eq = cv2.merge([eq, eq, eq])
+            resized = cv2.resize(face_eq, (112, 112))
+            raw = self.face_recognizer.feature(resized).flatten()
+            # guard against zero division, can happen with blank/dark patches
+            norm = max(np.linalg.norm(raw), 1e-10)
+            return raw / norm
+        except Exception as e:
+            log.error(f"embedding failed: {e}")
+            return None
 
     def process_frame(self, frame):
         if self.detector is None:
