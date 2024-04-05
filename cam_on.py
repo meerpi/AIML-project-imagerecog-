@@ -1,13 +1,16 @@
-"""switched to opencv yunet detector - way simpler than caffe blob preprocessing"""
+"""yunet detection + sface recognizer stub"""
 import cv2
 import numpy as np
 import logging
+import os
 
 logging.basicConfig(format='%(asctime)s | %(levelname)-8s | %(message)s', level=logging.INFO)
 log = logging.getLogger(__name__)
 
 YUNET_MODEL = "face_detection_yunet_2023mar.onnx"
+SFACE_MODEL = "face_recognizer_fast.onnx"
 CONF_THRESH = 0.7
+EMBEDDING_DIM = 128
 
 
 class Camera:
@@ -17,19 +20,32 @@ class Camera:
             raise IOError("cannot open webcam")
         self.face = None
         self.face_box = None
+        self.last_frame = None
         self.detector = None
+        self.face_recognizer = None
+        self.embedding_dim = EMBEDDING_DIM
         self._load_detector()
+        self._load_recognizer()
 
     def _load_detector(self):
-        import os
         if not os.path.exists(YUNET_MODEL):
-            log.warning(f"yunet model not found: {YUNET_MODEL}")
+            log.warning(f"yunet not found: {YUNET_MODEL}")
             return
         try:
             self.detector = cv2.FaceDetectorYN.create(YUNET_MODEL, "", (320, 240))
             log.info("YuNet detector loaded")
         except Exception as e:
             log.error(f"yunet load failed: {e}")
+
+    def _load_recognizer(self):
+        if not os.path.exists(SFACE_MODEL):
+            log.warning(f"sface not found: {SFACE_MODEL}")
+            return
+        try:
+            self.face_recognizer = cv2.FaceRecognizerSF.create(SFACE_MODEL, "")
+            log.info(f"SFace loaded ({EMBEDDING_DIM}-d)")
+        except Exception as e:
+            log.error(f"sface load failed: {e}")
 
     def process_frame(self, frame):
         if self.detector is None:
@@ -39,6 +55,7 @@ class Camera:
         _, dets = self.detector.detect(frame)
         self.face = None
         self.face_box = None
+        self.last_frame = frame
         if dets is None or len(dets) == 0:
             return frame
         best = max(dets, key=lambda d: d[-1])
