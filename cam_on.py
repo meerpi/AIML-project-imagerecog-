@@ -9,7 +9,7 @@ log = logging.getLogger(__name__)
 
 YUNET_MODEL = "face_detection_yunet_2023mar.onnx"
 SFACE_MODEL = "face_recognizer_fast.onnx"
-CONF_THRESH = 0.7
+CONF_THRESH = 0.6  # 0.6 catches more faces than 0.7, was missing detections indoors
 EMBEDDING_DIM = 128
 
 
