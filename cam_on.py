@@ -1,4 +1,4 @@
-"""yunet + sface with CLAHE equalization - embeddings actually work now"""
+"""yunet + sface + blur detection before computing embeddings"""
 import cv2
 import numpy as np
 import logging
@@ -11,6 +11,12 @@ YUNET_MODEL = "face_detection_yunet_2023mar.onnx"
 SFACE_MODEL = "face_recognizer_fast.onnx"
 CONF_THRESH = 0.6  # 0.6 catches more faces than 0.7, was missing detections indoors
 EMBEDDING_DIM = 128
+
+
+def is_blurry(image, threshold=50):
+    """check if image is too blurry to bother embedding - laplacian variance is fast"""
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    return cv2.Laplacian(gray, cv2.CV_64F).var() < threshold
 
 
 class Camera:
@@ -50,15 +56,16 @@ class Camera:
     def get_embedding(self, face_img):
         if self.face_recognizer is None:
             return None
+        if is_blurry(face_img):
+            log.warning("face crop is too blurry, skipping embedding")
+            return None
         try:
-            # CLAHE makes a big difference for varied lighting
             gray = cv2.cvtColor(face_img, cv2.COLOR_BGR2GRAY)
             clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
             eq = clahe.apply(gray)
             face_eq = cv2.merge([eq, eq, eq])
             resized = cv2.resize(face_eq, (112, 112))
             raw = self.face_recognizer.feature(resized).flatten()
-            # guard against zero division, can happen with blank/dark patches
             norm = max(np.linalg.norm(raw), 1e-10)
             return raw / norm
         except Exception as e:
