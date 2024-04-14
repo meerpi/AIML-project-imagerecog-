@@ -1,4 +1,4 @@
-"""yunet + sface + faiss index for vector storage"""
+"""yunet + sface + faiss + aligncrop for better face crops using 5-point landmarks"""
 import cv2
 import numpy as np
 import faiss
@@ -109,8 +109,38 @@ class Camera:
             log.error(f"embedding failed: {e}")
             return None
 
+    def get_embedding_from_frame(self, frame, detection):
+        # alignCrop does a 5-point affine warp using yunet landmarks
+        # much better than cropping the bbox directly
+        if self.face_recognizer is None:
+            return None
+        try:
+            aligned = self.face_recognizer.alignCrop(frame, detection)
+            if aligned is None or aligned.size == 0:
+                return None
+            gray = cv2.cvtColor(aligned, cv2.COLOR_BGR2GRAY)
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+            eq = clahe.apply(gray)
+            face_eq = cv2.merge([eq, eq, eq])
+            raw = self.face_recognizer.feature(face_eq).flatten()
+            norm = max(np.linalg.norm(raw), 1e-10)
+            return raw / norm
+        except Exception as e:
+            log.error(f"aligned embedding failed: {e}")
+            return None
+
+    @property
+    def facenet_func(self):
+        return self.face_recognizer
+
+    def _ensure_recognizer(self):
+        if self.face_recognizer is None:
+            self._load_recognizer()
+        return self.face_recognizer is not None
+
     def process_frame(self, frame):
         if self.detector is None:
+            self.face = None
             return frame
         h, w = frame.shape[:2]
         self.detector.setInputSize((w, h))
@@ -124,12 +154,14 @@ class Camera:
         if best[-1] < CONF_THRESH:
             return frame
         x, y, bw, bh = [int(v) for v in best[:4]]
+        x, y = max(0, x), max(0, y)
         x2, y2 = min(w, x + bw), min(h, y + bh)
         cv2.rectangle(frame, (x, y), (x2, y2), (0, 255, 0), 2)
         cv2.putText(frame, f"{best[-1]*100:.1f}%", (x, y - 8 if y > 20 else y + 20),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
         self.face = frame[y:y2, x:x2]
         self.face_box = best
+        self.last_frame = frame
         return frame
 
     def run(self):
