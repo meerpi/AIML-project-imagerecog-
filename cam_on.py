@@ -1,6 +1,7 @@
-"""yunet + sface + blur detection before computing embeddings"""
+"""yunet + sface + faiss index for vector storage"""
 import cv2
 import numpy as np
+import faiss
 import logging
 import os
 
@@ -14,13 +15,12 @@ EMBEDDING_DIM = 128
 
 
 def is_blurry(image, threshold=50):
-    """check if image is too blurry to bother embedding - laplacian variance is fast"""
     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
     return cv2.Laplacian(gray, cv2.CV_64F).var() < threshold
 
 
 class Camera:
-    def __init__(self):
+    def __init__(self, index_path="face_embedding.index"):
         self.cap = cv2.VideoCapture(0)
         if not self.cap.isOpened():
             raise IOError("cannot open webcam")
@@ -30,8 +30,11 @@ class Camera:
         self.detector = None
         self.face_recognizer = None
         self.embedding_dim = EMBEDDING_DIM
+        self.index_path = index_path
+        self.index = None
         self._load_detector()
         self._load_recognizer()
+        self.initialize_faiss_index()
 
     def _load_detector(self):
         if not os.path.exists(YUNET_MODEL):
@@ -52,6 +55,40 @@ class Camera:
             log.info(f"SFace recognizer loaded ({EMBEDDING_DIM}-d embeddings).")
         except Exception as e:
             log.error(f"sface load failed: {e}")
+
+    def initialize_faiss_index(self):
+        if os.path.exists(self.index_path):
+            try:
+                self.index = faiss.read_index(self.index_path)
+                log.info(f"Loading FAISS index from {self.index_path}")
+            except Exception as e:
+                log.error(f"FAISS load failed: {e}")
+                self.index = faiss.IndexFlatL2(self.embedding_dim)
+        else:
+            self.index = faiss.IndexFlatL2(self.embedding_dim)
+            log.info(f"Creating new FAISS index (dim={self.embedding_dim})")
+
+    def store_embedding(self, embedding):
+        if embedding is None:
+            return False
+        try:
+            vec = embedding.astype(np.float32).reshape(1, -1)
+            self.index.add(vec)
+            faiss.write_index(self.index, self.index_path)
+            return True
+        except Exception as e:
+            log.error(f"Failed to store embedding: {e}")
+            return False
+
+    def rebuild_index(self, embeddings):
+        self.index = faiss.IndexFlatL2(self.embedding_dim)
+        if embeddings:
+            mat = np.array(embeddings, dtype=np.float32)
+            self.index.add(mat)
+        try:
+            faiss.write_index(self.index, self.index_path)
+        except Exception as e:
+            log.error(f"Failed to write index: {e}")
 
     def get_embedding(self, face_img):
         if self.face_recognizer is None:
