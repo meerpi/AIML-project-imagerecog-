@@ -1,4 +1,4 @@
-"""registration app - camera feed + student registration form"""
+"""registration app - fix json load crash when file is malformed or empty"""
 import customtkinter as ctk
 import cv2
 import threading
@@ -26,11 +26,9 @@ class RegistrationApp(ctk.CTk):
         self.protocol("WM_DELETE_WINDOW", self.on_close)
         self.student_data = self._load_student_data()
 
-        # left: camera
         self.video_label = ctk.CTkLabel(self, text="")
         self.video_label.pack(side="left", padx=10, pady=10)
 
-        # right: form
         self.sidebar = ctk.CTkFrame(self, width=300)
         self.sidebar.pack(side="right", fill="y", padx=10, pady=10)
 
@@ -57,8 +55,17 @@ class RegistrationApp(ctk.CTk):
     def _load_student_data(self):
         if not os.path.exists(STUDENT_DATA_FILE):
             return {}
-        with open(STUDENT_DATA_FILE, "r") as f:
-            return json.load(f)
+        try:
+            with open(STUDENT_DATA_FILE, "r") as f:
+                data = json.load(f)
+            # guard: file might have been written as [] by accident
+            if not isinstance(data, dict):
+                log.warning("student_data.json is not a dict, starting fresh")
+                return {}
+            return data
+        except json.JSONDecodeError as e:
+            log.error(f"student data file is corrupt: {e}")
+            return {}
 
     def _save_student_data(self):
         with open(STUDENT_DATA_FILE, "w") as f:
