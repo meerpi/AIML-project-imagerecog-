@@ -2,3 +2,8 @@ __pycache__/
 *.pyc
 *.pyo
 .env
+student_data.json
+face_embedding.index
+embeddings/
+logs/
+*.onnx
