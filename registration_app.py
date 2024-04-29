@@ -6,10 +6,9 @@ import json
 import os
 import numpy as np
 from PIL import Image
-import logging
+from logger import get_logger
 
-logging.basicConfig(format='%(asctime)s | %(levelname)-8s | %(message)s', level=logging.INFO)
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")

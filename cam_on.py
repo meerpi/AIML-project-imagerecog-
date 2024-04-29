@@ -2,11 +2,10 @@
 import cv2
 import numpy as np
 import faiss
-import logging
+from logger import get_logger
 import os
 
-logging.basicConfig(format='%(asctime)s | %(levelname)-8s | %(message)s', level=logging.INFO)
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 YUNET_MODEL = "face_detection_yunet_2023mar.onnx"
 SFACE_MODEL = "face_recognizer_fast.onnx"

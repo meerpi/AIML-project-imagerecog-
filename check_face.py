@@ -3,10 +3,9 @@ import numpy as np
 import faiss
 import json
 import os
-import logging
+from logger import get_logger
 
-logging.basicConfig(format='%(asctime)s | %(levelname)-8s | %(message)s', level=logging.INFO)
-log = logging.getLogger(__name__)
+log = get_logger(__name__)
 
 STUDENT_DATA_FILE = "student_data.json"
 EMBEDDING_DIM = 128
