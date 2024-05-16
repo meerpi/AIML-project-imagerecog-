@@ -7,3 +7,4 @@ face_embedding.index
 embeddings/
 logs/
 *.onnx
+*.onnx
